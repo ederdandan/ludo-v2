@@ -147,7 +147,7 @@ export function createView({ canvas, onPick, onDieClick, reducedMotion = false, 
   previewDisc.rotation.x = -Math.PI / 2;
   previewGroup.add(previewRing, previewDisc);
   previewGroup.visible = false;
-  previewGroup.position.y = 0.09;
+  previewGroup.position.y = 0.195;
   board.group.add(previewGroup);
 
   const state = {
@@ -416,7 +416,7 @@ export function createView({ canvas, onPick, onDieClick, reducedMotion = false, 
     preview(color, rel, piece) {
       if (rel == null) return view.clearPreview();
       const p = pawns.posFor(color, rel, piece);
-      previewGroup.position.set(p.x, 0.085, p.z);
+      previewGroup.position.set(p.x, (p.y ?? 0.155) + 0.035, p.z);
       const hex = RESIN_HEX[color] || '#ffe9a8';
       previewRing.material.color.set(hex);
       previewDisc.material.color.set(hex);

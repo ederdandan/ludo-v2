@@ -9,9 +9,9 @@ const PAWN_HEIGHT = 0.66;
 // Peões maiores (leitura no celular): mais largos e bem mais altos.
 const PAWN_WIDE = 1.14;
 const PAWN_TALL = 1.32;
-const TRACK_Y = 0.062;
-const BASE_Y = 0.238;
-const GOAL_Y = 0.135;
+const TRACK_Y = 0.155; // casas entalhadas (CELL_TOP 0.15)
+const BASE_Y = 0.138;  // poço das bases (WELL_TOP 0.13)
+const GOAL_Y = 0.236;  // hub sobre o tampo (DECK_TOP 0.2)
 
 function latheProfile() {
   const p = [

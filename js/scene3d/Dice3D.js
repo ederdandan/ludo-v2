@@ -104,7 +104,7 @@ export function createDice() {
   blob.renderOrder = 2;
   group.add(blob);
 
-  group.position.set(0, 0.13 + HALF, 0.02);
+  group.position.set(0, 0.2 + HALF, 0.02);
 
   let spin = null;
   let current = 1;

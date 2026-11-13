@@ -42,9 +42,19 @@ function resinDepthTexture(size = 128) {
 const BASE_ORIGIN = { red: [0, 0], green: [0, 9], yellow: [9, 9], blue: [9, 0] };
 const START_COLOR = { 0: 'red', 13: 'green', 26: 'yellow', 39: 'blue' };
 
-function roundRectShape(w, h, r) {
-  const s = new THREE.Shape();
-  const x = -w / 2, y = -h / 2;
+// Alturas do tampo entalhado (y local do tabuleiro).
+export const DECK_TOP = 0.2;   // superfície de madeira maciça
+const GROOVE_TOP = 0.1;        // fundo dos sulcos entre as casas
+export const CELL_TOP = 0.15;  // topo das casas entalhadas / saídas
+export const LANE_TOP = 0.135; // faixa de resina rebaixada da reta final
+export const WELL_TOP = 0.13;  // poço de resina das bases
+const CELL_W = 0.92;           // casa (sulco de 8 cm entre elas)
+const ARM_INSET = 0.015;       // recuo da parede do rebaixo dos braços
+const WELL = 5.3;              // lado do poço das bases
+
+function roundRectShape(w, h, r, cx = 0, cy = 0, ShapeClass = THREE.Shape) {
+  const s = new ShapeClass();
+  const x = cx - w / 2, y = cy - h / 2;
   s.moveTo(x + r, y);
   s.lineTo(x + w - r, y);
   s.quadraticCurveTo(x + w, y, x + w, y + r);
@@ -71,6 +81,32 @@ function plateGeometry(w, d, h, r = 0.08, bevel = 0.012) {
   geo.rotateX(-Math.PI / 2);
   geo.translate(0, bevel, 0);
   geo.computeVertexNormals();
+  return geo;
+}
+
+// Tampo com rebaixos: placa arredondada com furos (x/z de mundo), topo em y = h.
+// O bisel cresce o contorno e encolhe os furos, então compensa nos dois.
+function deckGeometry(size, r, holes, h, bevel) {
+  const shape = roundRectShape(size - bevel * 2, size - bevel * 2, r - bevel);
+  for (const o of holes) {
+    shape.holes.push(roundRectShape(o.w + bevel * 2, o.d + bevel * 2, o.r + bevel, o.x, -o.z, THREE.Path));
+  }
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth: h - bevel * 2, bevelEnabled: true, bevelThickness: bevel, bevelSize: bevel,
+    bevelSegments: 2, curveSegments: 6,
+  });
+  geo.rotateX(-Math.PI / 2);
+  geo.translate(0, bevel, 0);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+// Moldura plana (quadro arredondado vazado) de lado `w` e largura `t`.
+function frameGeometry(w, r, t, h) {
+  const shape = roundRectShape(w, w, r);
+  shape.holes.push(roundRectShape(w - t * 2, w - t * 2, Math.max(0.02, r - t), 0, 0, THREE.Path));
+  const geo = new THREE.ExtrudeGeometry(shape, { depth: h, bevelEnabled: false, curveSegments: 8 });
+  geo.rotateX(-Math.PI / 2);
   return geo;
 }
 
@@ -197,36 +233,40 @@ export function buildBoard(E) {
   contact.renderOrder = 1;
   group.add(contact);
 
-  // ---------------- laje + moldura ----------------
+  // ---------------- laje + tampo entalhado ----------------
+  // Tampo maciço de madeira (topo em DECK_TOP) com rebaixos: os 4 braços do
+  // percurso (casas entalhadas, separadas por sulcos escuros) e as 4 bases
+  // (poço de resina com filete de latão). O hub central é o próprio tampo.
   const slab = new THREE.Mesh(plateGeometry(16.9, 16.9, 1.15, 0.62, 0.035), woodFrame);
   slab.position.y = -1.15;
   slab.castShadow = true;
   slab.receiveShadow = true;
   group.add(slab);
 
-  // superfície interna (fundo das ranhuras)
-  const playfield = new THREE.Mesh(plateGeometry(15.55, 15.55, 0.14, 0.18, 0.01), woodDark);
-  playfield.position.y = -0.14;
-  playfield.receiveShadow = true;
-  group.add(playfield);
+  const armRects = [[6, 0, 3, 6], [0, 6, 6, 3], [6, 9, 3, 6], [9, 6, 6, 3]].map(([r, c, rows, cols]) => {
+    const { x, z } = blockCenter(r, c, rows, cols);
+    return { x, z, w: cols, d: rows };
+  });
+  const baseRects = E.COLORS.map((color) => {
+    const [r0, c0] = BASE_ORIGIN[color];
+    return { color, ...blockCenter(r0, c0, 6, 6) };
+  });
+  const holes = [
+    ...armRects.map((a) => ({ x: a.x, z: a.z, w: a.w - ARM_INSET * 2, d: a.d - ARM_INSET * 2, r: 0.14 })),
+    ...baseRects.map((b) => ({ x: b.x, z: b.z, w: WELL, d: WELL, r: 0.42 })),
+  ];
+  const deck = new THREE.Mesh(deckGeometry(16.9, 0.62, holes, DECK_TOP, 0.03), woodFrame);
+  deck.castShadow = false; // rebaixos rasos: shadow map gera acne; o AO pré-calculado cobre
+  deck.receiveShadow = true;
+  deck.name = 'deck';
+  group.add(deck);
 
-  // lábio da moldura (4 barras) + filete de latão interno
-  const lipGeo = plateGeometry(16.9, 0.72, 0.16, 0.3, 0.02);
-  const lipSide = plateGeometry(0.72, 16.9, 0.16, 0.3, 0.02);
-  const lipY = 0.0;
-  for (const [geo, x, z] of [
-    [lipGeo, 0, -8.09], [lipGeo, 0, 8.09], [lipSide, -8.09, 0], [lipSide, 8.09, 0],
-  ]) {
-    const m = new THREE.Mesh(geo, woodFrame);
-    m.position.set(x, lipY, z);
-    m.castShadow = true; m.receiveShadow = true;
-    group.add(m);
-  }
-  // filete de latão no perímetro interno do tabuleiro
-  for (const [w, d, x, z] of [[15.6, 0.03, 0, -7.78], [15.6, 0.03, 0, 7.78], [0.03, 15.6, -7.78, 0], [0.03, 15.6, 7.78, 0]]) {
-    const bar = new THREE.Mesh(new THREE.BoxGeometry(w, 0.014, d), brass);
-    bar.position.set(x, 0.012, z);
-    group.add(bar);
+  // fundo dos braços (aparece só nos sulcos entre as casas)
+  for (const a of armRects) {
+    const floor = new THREE.Mesh(plateGeometry(a.w, a.d, GROOVE_TOP, 0.14, 0.01), woodDark);
+    floor.position.set(a.x, 0, a.z);
+    floor.receiveShadow = true;
+    group.add(floor);
   }
 
   // ---------------- casas ----------------
@@ -245,15 +285,16 @@ export function buildBoard(E) {
     });
   }
 
-  const woodCellGeo = normalizeUV(plateGeometry(0.88, 0.88, 0.045, 0.085, 0.008));
-  const woodCells = cells.filter((c) => c.abs == null || !START_COLOR[c.abs]);
+  const dummy = new THREE.Object3D();
+  const tint = new THREE.Color();
+  // casas de madeira entalhadas: topo abaixo do tampo, sulcos escuros entre elas
+  const woodCellGeo = normalizeUV(plateGeometry(CELL_W, CELL_W, CELL_TOP - GROOVE_TOP, 0.06, 0.008));
+  const woodCells = cells.filter((c) => c.abs != null && !START_COLOR[c.abs]);
   const woodInst = new THREE.InstancedMesh(woodCellGeo, woodCell, woodCells.length);
   woodInst.castShadow = true;
   woodInst.receiveShadow = true;
-  const dummy = new THREE.Object3D();
-  const tint = new THREE.Color();
   woodCells.forEach((c, i) => {
-    dummy.position.set(c.x, 0.0, c.z);
+    dummy.position.set(c.x, GROOVE_TOP, c.z);
     dummy.updateMatrix();
     woodInst.setMatrixAt(i, dummy.matrix);
     const k = 0.93 + ((i * 37) % 11) / 11 * 0.09;
@@ -264,46 +305,65 @@ export function buildBoard(E) {
   if (woodInst.instanceColor) woodInst.instanceColor.needsUpdate = true;
   group.add(woodInst);
 
-  // base de latão sob as casas de resina (faz o filete dourado)
-  const resinCells = cells.filter((c) => (c.abs != null && START_COLOR[c.abs]) || c.home);
-  const brassPlateGeo = plateGeometry(0.97, 0.97, 0.05, 0.1, 0.008);
-  const brassInst = new THREE.InstancedMesh(brassPlateGeo, brass, resinCells.length);
-  brassInst.castShadow = false;
-  brassInst.receiveShadow = true;
-  resinCells.forEach((c, i) => {
-    dummy.position.set(c.x, 0.0, c.z);
+  // casas de saída: resina sobre base de latão (o latão aparece como filete)
+  const startCells = cells.filter((c) => c.abs != null && START_COLOR[c.abs]);
+  const brassStart = new THREE.InstancedMesh(plateGeometry(0.97, 0.97, CELL_TOP - 0.01 - GROOVE_TOP, 0.08, 0.008), brass, startCells.length);
+  brassStart.receiveShadow = true;
+  startCells.forEach((c, i) => {
+    dummy.position.set(c.x, GROOVE_TOP, c.z);
     dummy.updateMatrix();
-    brassInst.setMatrixAt(i, dummy.matrix);
+    brassStart.setMatrixAt(i, dummy.matrix);
   });
-  brassInst.instanceMatrix.needsUpdate = true;
-  group.add(brassInst);
-
-  const resinInst = {};
-  for (const color of E.COLORS) {
-    const list = resinCells.filter((c) => (c.abs != null ? START_COLOR[c.abs] === color : c.home === color));
-    const geo = plateGeometry(0.9, 0.9, 0.05, 0.09, 0.008);
-    const inst = new THREE.InstancedMesh(geo, resin[color], list.length);
-    inst.castShadow = true;
-    inst.receiveShadow = true;
-    list.forEach((c, i) => {
-      dummy.position.set(c.x, 0.012, c.z);
-      dummy.updateMatrix();
-      inst.setMatrixAt(i, dummy.matrix);
-    });
-    inst.instanceMatrix.needsUpdate = true;
-    group.add(inst);
-    resinInst[color] = inst;
+  brassStart.instanceMatrix.needsUpdate = true;
+  group.add(brassStart);
+  for (const c of startCells) {
+    const m = new THREE.Mesh(plateGeometry(0.88, 0.88, CELL_TOP - GROOVE_TOP, 0.07, 0.008), resin[START_COLOR[c.abs]]);
+    m.position.set(c.x, GROOVE_TOP, c.z);
+    m.receiveShadow = true;
+    group.add(m);
   }
 
-  // estrelas de latão nas casas seguras (exceto saídas)
+  // retas finais: uma faixa contínua de resina rebaixada, moldura de latão e
+  // divisórias finas de latão entre as casas
+  const lanes = [];
+  const dividerGeo = new THREE.BoxGeometry(0.026, 0.012, 0.86);
+  const dividerInst = new THREE.InstancedMesh(dividerGeo, brass, E.COLORS.length * 4);
+  let di = 0;
+  for (const color of E.COLORS) {
+    const list = cells.filter((c) => c.home === color);
+    const xs = list.map((c) => c.x), zs = list.map((c) => c.z);
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), z0 = Math.min(...zs), z1 = Math.max(...zs);
+    const lane = { color, x: (x0 + x1) / 2, z: (z0 + z1) / 2, w: x1 - x0 + 1, d: z1 - z0 + 1 };
+    lanes.push(lane);
+    const frame = new THREE.Mesh(plateGeometry(lane.w - 0.03, lane.d - 0.03, LANE_TOP - 0.01 - GROOVE_TOP, 0.08, 0.008), brass);
+    frame.position.set(lane.x, GROOVE_TOP, lane.z);
+    frame.receiveShadow = true;
+    group.add(frame);
+    const strip = new THREE.Mesh(plateGeometry(lane.w - 0.12, lane.d - 0.12, LANE_TOP - GROOVE_TOP, 0.06, 0.008), resin[color]);
+    strip.position.set(lane.x, GROOVE_TOP, lane.z);
+    strip.receiveShadow = true;
+    group.add(strip);
+    const horizontal = lane.w > lane.d;
+    for (let k = 0; k < list.length - 1; k++) {
+      dummy.position.set((list[k].x + list[k + 1].x) / 2, LANE_TOP + 0.002, (list[k].z + list[k + 1].z) / 2);
+      dummy.rotation.set(0, horizontal ? 0 : Math.PI / 2, 0);
+      dummy.updateMatrix();
+      dividerInst.setMatrixAt(di++, dummy.matrix);
+    }
+  }
+  dummy.rotation.set(0, 0, 0);
+  dividerInst.count = di;
+  dividerInst.instanceMatrix.needsUpdate = true;
+  group.add(dividerInst);
+
+  // estrelas de latão embutidas nas casas seguras (exceto saídas)
   const starCells = [...E.SAFE].filter((abs) => !START_COLOR[abs]).map((abs) => plates.get(`${E.TRACK[abs][0]},${E.TRACK[abs][1]}`));
-  const starGeo = new THREE.ExtrudeGeometry(starShape(0.34, 0.15), { depth: 0.03, bevelEnabled: true, bevelSize: 0.01, bevelThickness: 0.008, bevelSegments: 1, curveSegments: 5 });
+  const starGeo = new THREE.ExtrudeGeometry(starShape(0.3, 0.13), { depth: 0.012, bevelEnabled: true, bevelSize: 0.008, bevelThickness: 0.006, bevelSegments: 1, curveSegments: 5 });
   starGeo.rotateX(-Math.PI / 2);
   const starInst = new THREE.InstancedMesh(starGeo, brass, starCells.length);
   starInst.castShadow = false;
   starCells.forEach((c, i) => {
-    dummy.position.set(c.x, 0.05, c.z);
-    dummy.rotation.set(0, 0, 0);
+    dummy.position.set(c.x, CELL_TOP - 0.008, c.z);
     dummy.updateMatrix();
     starInst.setMatrixAt(i, dummy.matrix);
   });
@@ -311,37 +371,26 @@ export function buildBoard(E) {
   group.add(starInst);
 
   // ---------------- bases ----------------
+  // poço rebaixado no tampo: resina com filete de latão na borda e anéis nas cavidades
   const baseGroups = {};
-  for (const color of E.COLORS) {
-    const [r0, c0] = BASE_ORIGIN[color];
-    const { x, z } = blockCenter(r0, c0, 6, 6);
+  for (const { color, x, z } of baseRects) {
     const bg = new THREE.Group();
     bg.position.set(x, 0, z);
 
-    const rim = new THREE.Mesh(plateGeometry(5.98, 5.98, 0.16, 0.34, 0.02), woodFrame);
-    rim.receiveShadow = true; rim.castShadow = true;
-    bg.add(rim);
-
-    const groove = new THREE.Mesh(plateGeometry(5.66, 5.66, 0.02, 0.3, 0.006), woodDark);
-    groove.position.y = 0.16;
-    bg.add(groove);
-
-    const well = new THREE.Mesh(plateGeometry(5.4, 5.4, 0.05, 0.26, 0.012), resin[color]);
-    well.position.y = 0.18;
+    const well = new THREE.Mesh(plateGeometry(WELL + 0.02, WELL + 0.02, WELL_TOP, 0.42, 0.012), resin[color]);
     well.receiveShadow = true;
     bg.add(well);
 
-    const brassRim = new THREE.Mesh(plateGeometry(5.5, 5.5, 0.016, 0.27, 0.005), brass);
-    brassRim.position.y = 0.184;
+    const brassRim = new THREE.Mesh(frameGeometry(WELL, 0.42, 0.07, 0.012), brass);
+    brassRim.position.y = WELL_TOP - 0.004;
     bg.add(brassRim);
 
     // anéis das 4 cavidades
     for (let i = 0; i < 4; i++) {
       const p = pointToWorld(E.pointOf, color, -1, i);
-      // p é mundial; converte para o grupo da base
       const ring = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.032, 10, 28), brass);
       ring.rotation.x = -Math.PI / 2;
-      ring.position.set(p.x - x, 0.238, p.z - z);
+      ring.position.set(p.x - x, WELL_TOP + 0.008, p.z - z);
       ring.castShadow = true;
       bg.add(ring);
     }
@@ -350,11 +399,6 @@ export function buildBoard(E) {
   }
 
   // ---------------- hub central ----------------
-  const hub = new THREE.Mesh(plateGeometry(2.98, 2.98, 0.08, 0.16, 0.012), wood);
-  hub.position.y = 0.02;
-  hub.receiveShadow = true;
-  group.add(hub);
-
   const tri = {
     red: triangleShape([-1.44, -1.44], [-1.44, 1.44], [0, 0]),
     green: triangleShape([-1.44, -1.44], [1.44, -1.44], [0, 0]),
@@ -365,20 +409,19 @@ export function buildBoard(E) {
     const geo = new THREE.ShapeGeometry(tri[color]);
     geo.rotateX(-Math.PI / 2);
     const m = new THREE.Mesh(geo, resin[color]);
-    m.position.y = 0.101;
+    m.position.y = DECK_TOP + 0.002;
     group.add(m);
   }
   // divisórias de latão nas diagonais
   for (const rot of [Math.PI / 4, -Math.PI / 4]) {
     const divider = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.022, 4.06), brass);
-    divider.position.y = 0.108;
+    divider.position.y = DECK_TOP + 0.009;
     divider.rotation.y = rot;
     group.add(divider);
   }
   const hubCap = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 0.06, 20), brass);
-  hubCap.position.y = 0.12;
+  hubCap.position.y = DECK_TOP + 0.02;
   group.add(hubCap);
-
   // ---------------- AO pré-calculado ----------------
   // Celular não tem shadow map: uma textura única (gerada uma vez em canvas) escurece
   // o fundo das ranhuras junto às casas, à moldura, às bases e ao hub — oclusão
@@ -393,18 +436,21 @@ export function buildBoard(E) {
     ctx.fillStyle = 'rgba(0,0,0,.2)';
     ctx.fillRect(0, 0, S, S);
     const px = (x) => (x + AO_SPAN / 2) * k;
-    // casters: [x, z, w, d, altura, raio]
+    // casters: [x, z, w, d, altura, raio] — o AO cobre só o fundo dos braços
     const casters = [];
     for (const cl of cells) {
-      const resinCell = (cl.abs != null && START_COLOR[cl.abs]) || cl.home;
-      const w = resinCell ? 0.97 : 0.88;
-      casters.push([cl.x, cl.z, w, w, 0.05, 0.09]);
+      if (cl.home) continue;
+      const w = START_COLOR[cl.abs] ? 0.97 : CELL_W;
+      casters.push([cl.x, cl.z, w, w, CELL_TOP - GROOVE_TOP, 0.07]);
     }
-    for (const bgc of Object.values(baseGroups)) casters.push([bgc.position.x, bgc.position.z, 5.98, 5.98, 0.24, 0.34]);
-    casters.push([0, 0, 2.98, 2.98, 0.1, 0.16]);
-    const L = 7.73, T = 3; // moldura: retângulos além da borda interna
-    casters.push([0, -L - T / 2, 20, T, 0.16, 0], [0, L + T / 2, 20, T, 0.16, 0],
-      [-L - T / 2, 0, T, 20, 0.16, 0], [L + T / 2, 0, T, 20, 0.16, 0]);
+    for (const ln of lanes) casters.push([ln.x, ln.z, ln.w - 0.03, ln.d - 0.03, LANE_TOP - GROOVE_TOP, 0.08]);
+    // paredes do rebaixo: faixas do tampo em volta de cada braço
+    const T = 2;
+    for (const a of armRects) {
+      const hw = a.w / 2 - ARM_INSET, hd = a.d / 2 - ARM_INSET, h = DECK_TOP - GROOVE_TOP;
+      casters.push([a.x, a.z - hd - T / 2, a.w, T, h, 0], [a.x, a.z + hd + T / 2, a.w, T, h, 0],
+        [a.x - hw - T / 2, a.z, T, a.d, h, 0], [a.x + hw + T / 2, a.z, T, a.d, h, 0]);
+    }
     function pass(alpha, blurU, dirScale) {
       ctx.save();
       ctx.shadowColor = `rgba(0,0,0,${alpha})`;
@@ -430,11 +476,10 @@ export function buildBoard(E) {
   const aoGeo = new THREE.PlaneGeometry(AO_SPAN, AO_SPAN);
   aoGeo.rotateX(-Math.PI / 2);
   const aoMat = new THREE.MeshBasicMaterial({
-    color: 0x000000, map: aoTex, transparent: true, depthWrite: false, opacity: 0.6,
-    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+    color: 0x000000, map: aoTex, transparent: true, depthWrite: false, opacity: 0.6, // sem polygonOffset: em ângulo rasante ele furava os poços
   });
   const aoFloor = new THREE.Mesh(aoGeo, aoMat);
-  aoFloor.position.y = 0.003;
+  aoFloor.position.y = GROOVE_TOP + 0.003;
   aoFloor.renderOrder = 1;
   aoFloor.name = 'floor-ao';
   group.add(aoFloor);
