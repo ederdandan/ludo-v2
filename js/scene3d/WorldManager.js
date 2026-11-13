@@ -6,6 +6,7 @@ import { createPawns } from './PawnManager.js';
 import { createDice } from './Dice3D.js';
 import { BOARD_HALF_DIAGONAL, BOARD_YAW } from './GridMapper.js';
 import { LudoEngine } from '../game-engine.js';
+import { detectGpuTier, TIER_PROFILE } from './GpuTier.js';
 
 const FOV = 32;
 const ELEV = THREE.MathUtils.degToRad(55);
@@ -15,7 +16,6 @@ const SLAB_HALF = 8.45; // meia largura da laje (16.9 / 2)
 const SLAB_DEPTH = 1.15;
 const LOW_FPS = 30;
 const TARGET_FPS = 45;
-const MAX_PR = 2;
 const MIN_PR = 1;
 
 function buildStudioEnvironment(renderer) {
@@ -60,15 +60,19 @@ function buildStudioEnvironment(renderer) {
 }
 
 export function createView({ canvas, onPick, onDieClick, reducedMotion = false, mobile = false }) {
+  // Tier da GPU define o ponto de partida; o FPS medido no loop só desce a partir dele.
+  const gpu = detectGpuTier({ mobile });
+  const profile = TIER_PROFILE[gpu.tier];
   const renderer = new THREE.WebGLRenderer({
-    // MSAA também no celular: sem ele as bordas ficam serrilhadas (custo baixo em GPUs mobile).
-    canvas, antialias: true, alpha: false, powerPreference: 'high-performance',
+    // MSAA também no celular (tier >= 1): sem ele as bordas ficam serrilhadas.
+    canvas, antialias: profile.antialias, alpha: false, powerPreference: 'high-performance',
   });
-  // Resolução adaptativa: começa nítida (até 2x) e só reduz se o FPS medido não sustentar.
-  let pixelRatio = Math.min(window.devicePixelRatio || 1, MAX_PR);
+  // Resolução adaptativa: começa nítida (até o teto do tier) e só reduz se o FPS não sustentar.
+  let pixelRatio = Math.min(window.devicePixelRatio || 1, profile.maxPR);
   renderer.setPixelRatio(pixelRatio);
-  renderer.shadowMap.enabled = !mobile;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.shadowMap.enabled = profile.shadows;
+  // Celular forte: PCF simples (o soft custa ~4x mais amostras).
+  renderer.shadowMap.type = profile.low ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 0.94;
@@ -88,8 +92,9 @@ export function createView({ canvas, onPick, onDieClick, reducedMotion = false, 
 
   const key = new THREE.DirectionalLight('#fff2d2', 2.85);
   key.position.set(8, 14, 7);
-  key.castShadow = !mobile;
-  key.shadow.mapSize.set(2048, 2048);
+  key.castShadow = profile.shadows;
+  const shadowRes = profile.low ? 1024 : 2048;
+  key.shadow.mapSize.set(shadowRes, shadowRes);
   key.shadow.camera.left = -13;
   key.shadow.camera.right = 13;
   key.shadow.camera.top = 13;
@@ -157,19 +162,23 @@ export function createView({ canvas, onPick, onDieClick, reducedMotion = false, 
     last: performance.now(),
     running: true,
     low: false,
+    shadows: true,
   };
 
-  function applyQuality(low) {
-    if (state.low === low) return;
+  // low = vidro falso sem transmission; shadows = shadow map real (peões/dado no tier 2).
+  function applyQuality(low, shadows = !low) {
+    if (state.low === low && state.shadows === shadows) return;
     state.low = low;
-    renderer.shadowMap.enabled = !low;
+    state.shadows = shadows;
+    renderer.shadowMap.enabled = shadows;
+    key.castShadow = shadows;
     board.setLowQuality(low);
-    pawns.setLowQuality(low);
-    dice.setLowQuality(low);
+    pawns.setLowQuality(low, shadows);
+    dice.setLowQuality(low, shadows);
     scene.traverse((o) => { if (o.isMesh && o.material) o.material.needsUpdate = true; });
   }
 
-  if (mobile) applyQuality(true);
+  applyQuality(profile.low, profile.shadows);
 
   // Faixa vertical livre entre o HUD de cima (topo, cards superiores) e o de baixo
   // (cards inferiores, dock). Só usada no retrato, onde o HUD empilha acima/abaixo.
@@ -348,8 +357,8 @@ export function createView({ canvas, onPick, onDieClick, reducedMotion = false, 
         if (fps < TARGET_FPS && pixelRatio > MIN_PR) {
           pixelRatio = Math.max(MIN_PR, pixelRatio - 0.25);
           renderer.setPixelRatio(pixelRatio);
-        } else if (fps < LOW_FPS && !state.low) {
-          applyQuality(true);
+        } else if (fps < LOW_FPS && (!state.low || state.shadows)) {
+          applyQuality(true, false);
           measured = true;
         } else {
           measured = true;
@@ -374,6 +383,7 @@ export function createView({ canvas, onPick, onDieClick, reducedMotion = false, 
   const view = {
     scene, camera, renderer, board, pawns, dice,
     resize,
+    gpu,
     setQuality: applyQuality,
 
     setDie(v) { dice.setImmediate(v || 1); },

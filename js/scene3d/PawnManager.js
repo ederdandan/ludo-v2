@@ -329,8 +329,9 @@ export function createPawns(E) {
 
   // Mobile: sem transmission. Vidro falso — opaco, saturado, verniz espelhado e
   // emissivo mais alto para parecer iluminado por dentro.
-  function setLowQuality(low) {
-    blobStrength = low ? 0.62 : 0.36;
+  function setLowQuality(low, shadows = !low) {
+    // Sem shadow map a bolha faz todo o contato; com ele, só complementa.
+    blobStrength = shadows ? 0.36 : 0.62;
     for (const color of E.COLORS) {
       for (const m of [mat[color], highMat[color]]) {
         m.transparent = false; m.opacity = 1;

@@ -177,10 +177,10 @@ export function createDice() {
     return hits.length > 0;
   }
 
-  function setLowQuality(low) {
+  function setLowQuality(low, shadows = !low) {
     bodyMat.clearcoat = low ? 0.1 : 0.5;
     bodyMat.needsUpdate = true;
-    blob.material.opacity = low ? 0.55 : 0.3;
+    blob.material.opacity = shadows ? 0.3 : 0.55;
   }
 
   return { group, roll, setImmediate, update, pick, setLowQuality, get value() { return current; } };
