@@ -11,6 +11,34 @@ export const RESIN_HEX = {
   blue: '#223a86',
 };
 
+// Mapa de profundidade da resina (cinza, multiplica a cor): centro mais claro,
+// bordas escurecidas e nuvens leves de pigmento. UV das placas vai de 0 a 1.
+function resinDepthTexture(size = 128) {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const g = c.getContext('2d');
+  const grad = g.createRadialGradient(size * 0.42, size * 0.4, size * 0.05, size / 2, size / 2, size * 0.72);
+  grad.addColorStop(0, '#ffffff');
+  grad.addColorStop(0.6, '#cfcfcf');
+  grad.addColorStop(1, '#5c5c5c');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, size, size);
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < 26; i++) {
+    const x = rnd() * size, y = rnd() * size, r = size * (0.08 + rnd() * 0.18);
+    const cg = g.createRadialGradient(x, y, 0, x, y, r);
+    const a = 0.05 + rnd() * 0.07;
+    cg.addColorStop(0, rnd() > 0.5 ? `rgba(255,255,255,${a})` : `rgba(0,0,0,${a})`);
+    cg.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = cg;
+    g.fillRect(0, 0, size, size);
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
 const BASE_ORIGIN = { red: [0, 0], green: [0, 9], yellow: [9, 9], blue: [9, 0] };
 const START_COLOR = { 0: 'red', 13: 'green', 26: 'yellow', 39: 'blue' };
 
@@ -354,19 +382,47 @@ export function buildBoard(E) {
   group.rotation.y = BOARD_YAW;
 
   // ---------------- qualidade ----------------
+  // Mobile: sem transmission. A resina vira um "vidro falso" opaco — cor profunda,
+  // verniz brilhante e um mapa de profundidade (centro claro, bordas escuras, nuvens
+  // sutis) que imita a luz atravessando o bloco. Opaca para não lavar a cor com a
+  // madeira clara de baixo (era o que deixava tudo pastel).
+  const depthTex = resinDepthTexture();
+  // UV 0..1 nas peças de resina (as placas saem em unidades de mundo) p/ o mapa caber.
+  const resinGeos = new Set();
+  group.traverse((o) => { if (o.isMesh && allResin.includes(o.material)) resinGeos.add(o.geometry); });
+  resinGeos.forEach(normalizeUV);
+  // Tons vivos do vidro falso (sem transmission a cor base escura fica barrenta).
+  const LOW_HEX = { red: '#b8160d', green: '#0d8128', yellow: '#cf8f0a', blue: '#2140b8' };
+  const desk = new Map(allResin.map((m) => [m, {
+    color: m.color.clone(), emissive: m.emissive.clone(),
+    roughness: m.roughness, clearcoatRoughness: m.clearcoatRoughness,
+    envMapIntensity: m.envMapIntensity, emissiveIntensity: m.emissiveIntensity,
+  }]));
   let low = false;
   function setLowQuality(value) {
     if (low === value) return;
     low = value;
-    for (const m of allResin) {
+    for (const [color, m] of Object.entries(resin)) {
+      m.transparent = false;
+      m.opacity = 1;
       if (value) {
         m.transmission = 0;
-        m.transparent = true;
-        m.opacity = 0.93;
+        m.map = depthTex;
+        m.color.set(LOW_HEX[color]);
+        m.emissive.set(LOW_HEX[color]);
+        m.roughness = 0.34;
+        m.clearcoat = 0.7;
+        m.clearcoatRoughness = 0.22;
+        m.envMapIntensity = 0.55;
+        m.emissiveIntensity = 0.06;
       } else {
+        const d = desk.get(m);
+        m.color.copy(d.color); m.emissive.copy(d.emissive);
+        m.roughness = d.roughness; m.clearcoatRoughness = d.clearcoatRoughness;
+        m.envMapIntensity = d.envMapIntensity; m.emissiveIntensity = d.emissiveIntensity;
+        m.map = null;
+        m.clearcoat = 0.85;
         m.transmission = 0.86;
-        m.transparent = false;
-        m.opacity = 1;
       }
       m.needsUpdate = true;
     }
@@ -386,7 +442,7 @@ export function buildBoard(E) {
           else o.material?.dispose?.();
         }
       });
-      for (const t of [woodTex.map, woodTex.normalMap, slateTex, contactTex]) t?.dispose?.();
+      for (const t of [woodTex.map, woodTex.normalMap, slateTex, contactTex, depthTex]) t?.dispose?.();
     },
   };
 }

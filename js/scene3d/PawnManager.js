@@ -4,6 +4,9 @@ import * as THREE from '../../vendor/three.module.min.js';
 import { RESIN_HEX } from './BoardBuilder.js';
 
 const PAWN_HEIGHT = 0.66;
+// Peões maiores (leitura no celular): mais largos e bem mais altos.
+const PAWN_WIDE = 1.14;
+const PAWN_TALL = 1.32;
 const TRACK_Y = 0.062;
 const BASE_Y = 0.238;
 const GOAL_Y = 0.135;
@@ -15,7 +18,7 @@ function latheProfile() {
     [0.10, 0.262], [0.086, 0.33], [0.138, 0.372], [0.166, 0.432],
     [0.152, 0.50], [0.112, 0.558], [0.055, 0.598], [0.001, PAWN_HEIGHT],
   ];
-  return p.map(([x, y]) => new THREE.Vector2(x * 1.24, y * 1.5));
+  return p.map(([x, y]) => new THREE.Vector2(x * 1.24 * PAWN_WIDE, y * 1.5 * PAWN_TALL));
 }
 
 export function createPawns(E) {
@@ -24,12 +27,12 @@ export function createPawns(E) {
   // manchas de contato (falsas sombras) separadas, para não subirem no salto
   const shadowGroup = new THREE.Group();
   group.add(shadowGroup);
-  const blobGeo = new THREE.CircleGeometry(0.33, 22);
+  const blobGeo = new THREE.CircleGeometry(0.33 * PAWN_WIDE, 22);
 
   const geo = new THREE.LatheGeometry(latheProfile(), 28);
   geo.computeVertexNormals();
 
-  const footGeo = new THREE.CylinderGeometry(0.315, 0.33, 0.03, 26);
+  const footGeo = new THREE.CylinderGeometry(0.315 * PAWN_WIDE, 0.33 * PAWN_WIDE, 0.03, 26);
   const footMat = new THREE.MeshStandardMaterial({ color: '#d4af6a', metalness: 0.9, roughness: 0.3 });
 
   const PAWN_HEX = { red: '#c62222', green: '#2b9440', yellow: '#dfa428', blue: '#3a56c8' };
@@ -52,7 +55,7 @@ export function createPawns(E) {
     });
   }
 
-  const ringGeo = new THREE.RingGeometry(0.34, 0.47, 36);
+  const ringGeo = new THREE.RingGeometry(0.34 * PAWN_WIDE, 0.47 * PAWN_WIDE, 36);
   ringGeo.rotateX(-Math.PI / 2);
 
   const pawns = new Map(); // "color-i"
@@ -318,15 +321,17 @@ export function createPawns(E) {
     return hits[0].object.userData;
   }
 
+  // Mobile: sem transmission. Vidro falso — opaco, saturado, verniz espelhado e
+  // emissivo mais alto para parecer iluminado por dentro.
   function setLowQuality(low) {
     for (const color of E.COLORS) {
-      const m = mat[color];
-      if (low) {
-        m.transmission = 0; m.transparent = true; m.opacity = 0.96;
-      } else {
-        m.transmission = 0.55; m.transparent = false; m.opacity = 1;
+      for (const m of [mat[color], highMat[color]]) {
+        m.transparent = false; m.opacity = 1;
+        m.transmission = low ? 0 : (m === mat[color] ? 0.55 : 0.1);
+        m.emissiveIntensity = low ? (m === mat[color] ? 0.3 : 0.38) : (m === mat[color] ? 0.17 : 0.2);
+        m.envMapIntensity = low ? 1.4 : (m === mat[color] ? 1.8 : 1.6);
+        m.needsUpdate = true;
       }
-      m.needsUpdate = true;
     }
   }
 
