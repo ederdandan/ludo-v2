@@ -21,7 +21,7 @@ async function connect(targetUrl) {
   const p = await connect(url);
   await sleep(9000);
   console.log('SW', await p.ev(`(async () => { const r = await navigator.serviceWorker.getRegistration(); return JSON.stringify({ reg: !!r, active: r && r.active && r.active.state, caches: await caches.keys() }); })()`));
-  console.log('CACHE', await p.ev(`(async () => { const c = await caches.open('ludo-v2.0.0-wood3d'); const keys = await c.keys(); return JSON.stringify({ total: keys.length, hasThree: !!(await c.match('./vendor/three.module.min.js')), hasMain: !!(await c.match('./js/main.js')), hasIndex: !!(await c.match('./index.html')) }); })()`));
+  console.log('CACHE', await p.ev(`(async () => { const c = await caches.open('ludo-v2.0.1-wood3d'); const keys = await c.keys(); return JSON.stringify({ total: keys.length, hasThree: !!(await c.match('./vendor/three.module.min.js')), hasMain: !!(await c.match('./js/main.js')), hasIndex: !!(await c.match('./index.html')) }); })()`));
   await p.send('Network.emulateNetworkConditions', { offline: true, latency: 0, downloadThroughput: 0, uploadThroughput: 0 });
   await p.send('Page.reload', { ignoreCache: false });
   await sleep(7000);

@@ -4,13 +4,19 @@ import * as THREE from '../../vendor/three.module.min.js';
 import { buildBoard, RESIN_HEX } from './BoardBuilder.js';
 import { createPawns } from './PawnManager.js';
 import { createDice } from './Dice3D.js';
-import { BOARD_HALF_DIAGONAL } from './GridMapper.js';
+import { BOARD_HALF_DIAGONAL, BOARD_YAW } from './GridMapper.js';
 import { LudoEngine } from '../game-engine.js';
 
 const FOV = 32;
 const ELEV = THREE.MathUtils.degToRad(55);
+const PORTRAIT_ELEV = THREE.MathUtils.degToRad(58);
 const BOARD_RADIUS = BOARD_HALF_DIAGONAL + 2.0; // inclui a moldura
+const SLAB_HALF = 8.45; // meia largura da laje (16.9 / 2)
+const SLAB_DEPTH = 1.15;
 const LOW_FPS = 30;
+const TARGET_FPS = 45;
+const MAX_PR = 2;
+const MIN_PR = 1;
 
 function buildStudioEnvironment(renderer) {
   const pmrem = new THREE.PMREMGenerator(renderer);
@@ -55,9 +61,12 @@ function buildStudioEnvironment(renderer) {
 
 export function createView({ canvas, onPick, onDieClick, reducedMotion = false, mobile = false }) {
   const renderer = new THREE.WebGLRenderer({
-    canvas, antialias: !mobile, alpha: false, powerPreference: 'high-performance',
+    // MSAA também no celular: sem ele as bordas ficam serrilhadas (custo baixo em GPUs mobile).
+    canvas, antialias: true, alpha: false, powerPreference: 'high-performance',
   });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, mobile ? 1.5 : 2));
+  // Resolução adaptativa: começa nítida (até 2x) e só reduz se o FPS medido não sustentar.
+  let pixelRatio = Math.min(window.devicePixelRatio || 1, MAX_PR);
+  renderer.setPixelRatio(pixelRatio);
   renderer.shadowMap.enabled = !mobile;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -154,7 +163,6 @@ export function createView({ canvas, onPick, onDieClick, reducedMotion = false, 
     if (state.low === low) return;
     state.low = low;
     renderer.shadowMap.enabled = !low;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, low ? 1 : 2));
     board.setLowQuality(low);
     pawns.setLowQuality(low);
     dice.setLowQuality(low);
@@ -163,22 +171,93 @@ export function createView({ canvas, onPick, onDieClick, reducedMotion = false, 
 
   if (mobile) applyQuality(true);
 
+  // Faixa vertical livre entre o HUD de cima (topo, cards superiores) e o de baixo
+  // (cards inferiores, dock). Só usada no retrato, onde o HUD empilha acima/abaixo.
+  function safeBand(h) {
+    let top = 0, bottom = h;
+    const game = document.getElementById('screen-game');
+    if (game && !game.hidden) {
+      for (const el of game.querySelectorAll('.hud-top, #players > *, .dock')) {
+        const r = el.getBoundingClientRect();
+        if (!r.height) continue;
+        if ((r.top + r.bottom) / 2 < h / 2) top = Math.max(top, r.bottom);
+        else bottom = Math.min(bottom, r.top);
+      }
+    }
+    if (bottom - top < h * 0.35) return { top: 0, bottom: h };
+    return { top, bottom };
+  }
+
+  const _v = new THREE.Vector3();
+  function projectedBox(w, h) {
+    updateCamera();
+    camera.updateMatrixWorld();
+    board.group.updateMatrixWorld(true);
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const x of [-SLAB_HALF, SLAB_HALF]) for (const z of [-SLAB_HALF, SLAB_HALF]) for (const y of [0.1, -SLAB_DEPTH]) {
+      board.group.localToWorld(_v.set(x, y, z)).project(camera);
+      const px = (_v.x + 1) / 2 * w, py = (1 - _v.y) / 2 * h;
+      minX = Math.min(minX, px); maxX = Math.max(maxX, px);
+      minY = Math.min(minY, py); maxY = Math.max(maxY, py);
+    }
+    return { minX, maxX, minY, maxY };
+  }
+
   function fit() {
     const w = canvas.clientWidth || window.innerWidth;
     const h = canvas.clientHeight || window.innerHeight;
     const aspect = w / h;
+    const portrait = aspect < 1;
     camera.aspect = aspect;
+    camera.clearViewOffset();
     const vFov = THREE.MathUtils.degToRad(FOV);
     const hFov = 2 * Math.atan(Math.tan(vFov / 2) * aspect);
-    // Retrato: câmera um pouco mais alta deixa o losango mais vertical e aproveita a tela.
-    state.baseElev = aspect < 1 ? THREE.MathUtils.degToRad(64) : ELEV;
-    const halfH = BOARD_RADIUS * Math.sin(state.baseElev);
-    const margin = aspect < 1 ? 1.03 : 1.3;
-    const distV = halfH / Math.tan(vFov / 2);
-    const distH = BOARD_RADIUS / Math.tan(hFov / 2);
-    state.dist = Math.max(distV, distH) * margin;
+
+    if (!portrait) {
+      board.group.rotation.y = BOARD_YAW;
+      state.baseElev = ELEV;
+      const halfH = BOARD_RADIUS * Math.sin(state.baseElev);
+      const distV = halfH / Math.tan(vFov / 2);
+      const distH = BOARD_RADIUS / Math.tan(hFov / 2);
+      state.dist = Math.max(distV, distH) * 1.18;
+      camera.updateProjectionMatrix();
+      updateCamera();
+      return;
+    }
+
+    // Retrato: tabuleiro alinhado à tela (sem giro de 45°) ocupa ~41% mais largura,
+    // e a câmera é ajustada por projeção real para preencher a faixa livre entre os HUDs.
+    board.group.rotation.y = 0;
+    state.baseElev = PORTRAIT_ELEV;
+    camera.updateProjectionMatrix();
+    const band = safeBand(h);
+    const availW = w * 0.96;
+    const availH = (band.bottom - band.top) * 0.96;
+    state.dist = SLAB_HALF / Math.tan(hFov / 2) * 1.2;
+    for (let i = 0; i < 4; i++) {
+      const b = projectedBox(w, h);
+      const s = Math.max((b.maxX - b.minX) / availW, (b.maxY - b.minY) / availH);
+      state.dist *= s;
+    }
+    const b = projectedBox(w, h);
+    const shiftY = (band.top + band.bottom) / 2 - (b.minY + b.maxY) / 2;
+    if (Math.abs(shiftY) > 0.5) {
+      camera.setViewOffset(w, h, 0, -shiftY, w, h);
+    }
     camera.updateProjectionMatrix();
     updateCamera();
+  }
+
+  // O HUD (cards dos jogadores) é montado depois do resize; refaz o enquadramento
+  // quando a faixa livre muda.
+  let bandSig = '';
+  function checkBand() {
+    const h = canvas.clientHeight || window.innerHeight;
+    const w = canvas.clientWidth || window.innerWidth;
+    if (w >= h) return;
+    const b = safeBand(h);
+    const sig = `${w}x${h}:${Math.round(b.top)}-${Math.round(b.bottom)}`;
+    if (sig !== bandSig) { bandSig = sig; fit(); }
   }
 
   function updateCamera() {
@@ -235,8 +314,9 @@ export function createView({ canvas, onPick, onDieClick, reducedMotion = false, 
 
   // ---- loop ----
   let frames = 0;
-  let fpsTime = 0;
+  let fpsTime = -1.5; // aquecimento: ignora compilação de shaders/carregamento
   let measured = false;
+  let bandTime = 0;
   function loop(now) {
     if (!state.running) return;
     requestAnimationFrame(loop);
@@ -253,13 +333,27 @@ export function createView({ canvas, onPick, onDieClick, reducedMotion = false, 
     dice.update(dt);
     renderer.render(scene, camera);
 
+    bandTime += dt;
+    if (bandTime >= 0.4) { bandTime = 0; checkBand(); }
+
+    // Escalonamento só para baixo: reduz a resolução em degraus de 0.25 até o FPS
+    // sustentar; no piso (1x), cai para a qualidade baixa (sem sombras/transmissão).
     if (!measured) {
-      frames++;
       fpsTime += dt;
-      if (fpsTime >= 3) {
+      if (fpsTime > 0) frames++;
+      if (fpsTime >= 2) {
         const fps = frames / fpsTime;
-        measured = true;
-        if (fps < LOW_FPS && !state.low) applyQuality(true);
+        frames = 0;
+        fpsTime = 0;
+        if (fps < TARGET_FPS && pixelRatio > MIN_PR) {
+          pixelRatio = Math.max(MIN_PR, pixelRatio - 0.25);
+          renderer.setPixelRatio(pixelRatio);
+        } else if (fps < LOW_FPS && !state.low) {
+          applyQuality(true);
+          measured = true;
+        } else {
+          measured = true;
+        }
       }
     }
   }
