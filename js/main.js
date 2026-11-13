@@ -1556,6 +1556,7 @@ function netFail(err) {
   else if (type === 'unavailable-id') msg = 'Não foi possível reabrir a sala agora. Tente de novo em instantes.';
   else if (err && /carregar/.test(err.message || '')) msg = 'Não foi possível carregar a biblioteca de rede.';
   Game.state = null;
+  View.reset(ATTRACT);
   showScreen('home');
   let close;
   close = openModal(h('div', { class: 'text-center' },
@@ -1972,6 +1973,7 @@ function clientHandle(msg) {
       clearRoomUrl();
       Store.del('ludo:session:' + Net.code);
       Game.state = null;
+      View.reset(ATTRACT);
       clearTimers();
       document.querySelectorAll('.modal-back').forEach(m => m.remove());
       showScreen('home');
