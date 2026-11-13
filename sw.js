@@ -1,6 +1,6 @@
 /* Ludo Supreme v2 — service worker offline-first.
    Caminhos relativos: funciona em raiz de domínio e em /repo-name/. */
-const CACHE_NAME = 'ludo-v2.0.7-postfx';
+const CACHE_NAME = 'ludo-v2.0.8-dado';
 
 const PRECACHE = [
   './',

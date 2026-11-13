@@ -69,6 +69,18 @@
 /* PWA: registra cedo, antes do build 3D, para o SW controlar já a 1ª visita. */
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
   navigator.serviceWorker.register('./sw.js').catch(() => { /* offline opcional */ });
+  // Versão nova do SW assumiu: recarrega para usar o JS novo. Fora de partida
+  // recarrega já; durante a partida espera o app voltar do segundo plano.
+  const hadCtrl = !!navigator.serviceWorker.controller;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadCtrl || window.__swReloading) return;
+    const inGame = () => { const g = document.getElementById('screen-game'); return g && !g.hidden; };
+    const go = () => { window.__swReloading = true; location.reload(); };
+    if (!inGame()) return go();
+    document.addEventListener('visibilitychange', function f() {
+      if (document.visibilityState === 'visible') { document.removeEventListener('visibilitychange', f); go(); }
+    });
+  });
 }
 </script>
 <script type="module" src="./js/main.js"></script>
