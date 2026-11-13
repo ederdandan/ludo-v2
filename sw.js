@@ -1,6 +1,6 @@
 /* Ludo Supreme v2 — service worker offline-first.
    Caminhos relativos: funciona em raiz de domínio e em /repo-name/. */
-const CACHE_NAME = 'ludo-v2.0.8-dado';
+const CACHE_NAME = 'ludo-v2.0.9-pwa';
 
 const PRECACHE = [
   './',
@@ -36,6 +36,9 @@ const PRECACHE = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-512.png',
+  './icons/icon-maskable-192.png',
+  './icons/icon.svg',
+  './icons/favicon-32.png',
   './icons/apple-touch-icon.png',
 ];
 

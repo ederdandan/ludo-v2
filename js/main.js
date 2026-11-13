@@ -282,8 +282,7 @@ function renderHome() {
   nameInput.addEventListener('input', () => { profile.name = nameInput.value.slice(0, 12); saveProfile(); });
   nameInput.addEventListener('blur', () => { profile.name = cleanName(nameInput.value); nameInput.value = profile.name; saveProfile(); });
 
-  const logo = h('div', { class: 'grid grid-cols-2 gap-1 w-14 h-14 rotate-45 rounded-xl overflow-hidden shadow-lg' },
-    ['red', 'green', 'blue', 'yellow'].map(c => h('div', { style: `background:var(--${c})` })));
+  const logo = h('img', { src: './icons/icon.svg', alt: '', width: '56', height: '56', class: 'w-14 h-14 drop-shadow-lg' });
 
   root.append(h('div', { class: 'max-w-md mx-auto px-4 py-8 flex flex-col gap-5 min-h-screen' },
     h('div', { class: 'flex items-center justify-between' },
@@ -308,10 +307,53 @@ function renderHome() {
       h('button', { class: 'btn btn-ghost', onclick: () => hostRoom(null) }, h('i', { class: 'fa-solid fa-plus' }), 'Criar Sala'),
       h('button', { class: 'btn btn-ghost', onclick: () => openJoin('') }, h('i', { class: 'fa-solid fa-right-to-bracket' }), 'Entrar em Sala')),
     h('button', { class: 'btn btn-ghost w-full', onclick: showStats }, h('i', { class: 'fa-solid fa-chart-simple' }), 'Estatísticas'),
+    installButton(),
     h('p', { class: 'text-center text-xs text-slate-500', text: 'Salas online: cada pessoa joga do próprio aparelho.' }),
   ));
   updateMuteButtons();
 }
+
+// ---------- Instalação (PWA) ----------
+const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+function installButton() {
+  if (isStandalone()) return null;
+  const evt = window.__installEvt;
+  if (!evt && !isIOS()) return null;
+  return h('button', { class: 'btn btn-ghost w-full install-btn', onclick: () => evt ? promptInstall() : showIOSInstall() },
+    h('i', { class: 'fa-solid fa-download' }), 'Instalar o app',
+    h('span', { class: 'text-xs font-normal opacity-80', text: 'joga offline, em tela cheia' }));
+}
+
+async function promptInstall() {
+  const evt = window.__installEvt;
+  if (!evt) return;
+  try {
+    await evt.prompt();
+    window.__installEvt = null; // o evento só serve para um prompt
+    await evt.userChoice;
+  } catch { return; /* sem gesto do usuário: mantém o botão */ }
+  if (!$('#screen-home').hidden) renderHome();
+}
+
+function showIOSInstall() {
+  let close;
+  const step = (icon, pre, strong, post = '') => h('li', { class: 'flex items-center gap-3' },
+    h('span', { class: 'icon-btn !w-10 !h-10 shrink-0' }, h('i', { class: 'fa-solid ' + icon })),
+    h('span', {}, pre, h('strong', { text: strong }), post));
+  close = openModal(h('div', { class: 'flex flex-col gap-4' },
+    h('div', { class: 'flex items-center gap-3' },
+      h('img', { src: './icons/icon.svg', alt: '', width: '48', height: '48' }),
+      h('h2', { class: 'text-xl font-bold', text: 'Instalar no iPhone/iPad' })),
+    h('ol', { class: 'flex flex-col gap-3 text-slate-200' },
+      step('fa-arrow-up-from-bracket', 'No Safari, toque em ', 'Compartilhar'),
+      step('fa-square-plus', 'Escolha ', 'Adicionar à Tela de Início'),
+      step('fa-check', 'Toque em ', 'Adicionar', ' — o Ludo abre em tela cheia e funciona offline')),
+    h('button', { class: 'btn btn-primary w-full', onclick: () => close() }, 'Entendi')));
+}
+
+window.addEventListener('ludo:installable', () => { if (!$('#screen-home').hidden) renderHome(); });
 
 // ---------- Componentes de configuração ----------
 function seg(options, value, onChange, label) {
@@ -2193,6 +2235,12 @@ if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
     if (hostSave) { hostRoom(hostSave); return; }
     if (Store.get('ludo:session:' + room, null)) { joinRoom(room); return; }
     openJoin(room);
+    return;
+  }
+  // atalho do app instalado (manifest.shortcuts)
+  if (new URLSearchParams(location.search).get('play') === 'solo') {
+    history.replaceState(null, '', location.pathname);
+    renderSoloSetup(); showScreen('setup');
     return;
   }
   renderHome();

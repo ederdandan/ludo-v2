@@ -376,3 +376,7 @@ input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--gold); }
   .die-btn:not(:disabled) { animation: none; }
 }
 :focus-visible { outline: 2px solid var(--gold-soft); outline-offset: 2px; }
+
+/* Botão de instalar o PWA na home */
+.install-btn { border-color: rgba(212, 175, 106, .5); color: var(--gold-soft); }
+.install-btn .fa-download { color: var(--gold); }

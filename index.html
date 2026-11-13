@@ -7,8 +7,13 @@
 <meta name="theme-color" content="#141922">
 <meta name="description" content="Ludo clássico em um diorama 3D de madeira e resina. Solo, no mesmo aparelho ou online.">
 <link rel="manifest" href="./manifest.json">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 4'%3E%3Crect width='2' height='2' fill='%23b3181a'/%3E%3Crect x='2' width='2' height='2' fill='%23146b2b'/%3E%3Crect x='2' y='2' width='2' height='2' fill='%23c08a1e'/%3E%3Crect y='2' width='2' height='2' fill='%232a4090'/%3E%3C/svg%3E">
-<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<link rel="icon" type="image/svg+xml" href="./icons/icon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="./icons/apple-touch-icon.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Ludo Supreme">
 <link rel="stylesheet" href="./vendor/fontawesome/all.min.css">
 <link rel="stylesheet" href="./css/theme.css">
 <link rel="stylesheet" href="./css/layout.css">
@@ -67,6 +72,16 @@
 
 <script>
 /* PWA: registra cedo, antes do build 3D, para o SW controlar já a 1ª visita. */
+/* Instalação: o evento pode chegar antes do main.js; guarda e avisa a home. */
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  window.__installEvt = e;
+  window.dispatchEvent(new Event('ludo:installable'));
+});
+window.addEventListener('appinstalled', () => {
+  window.__installEvt = null;
+  window.dispatchEvent(new Event('ludo:installable'));
+});
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
   navigator.serviceWorker.register('./sw.js').catch(() => { /* offline opcional */ });
   // Versão nova do SW assumiu: recarrega para usar o JS novo. Fora de partida
