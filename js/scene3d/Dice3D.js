@@ -61,7 +61,9 @@ function quatFor(value) {
   return new THREE.Quaternion().setFromUnitVectors(from, to);
 }
 
-export function createDice() {
+// scale: tamanho em repouso (o hub 3×3 comporta até ~2×).
+// pop: quanto o dado cresce e sobe em direção à câmera durante a rolagem.
+export function createDice({ scale = 1, pop = 0, camera = null } = {}) {
   const group = new THREE.Group();
   group.name = 'dice';
 
@@ -104,9 +106,24 @@ export function createDice() {
   blob.renderOrder = 2;
   group.add(blob);
 
-  group.position.set(0, 0.2 + HALF, 0.02);
+  const restY = 0.2 + HALF * scale;
+  group.scale.setScalar(scale);
+  group.position.set(0, restY, 0.02);
+  const blobOpacity = () => blob.material.userData.base ?? 0.3;
+  function setPop(h) { // h 0..1: altura relativa do "salto" até o meio da tela
+    group.scale.setScalar(scale * (1 + pop * h));
+    blob.material.opacity = blobOpacity() * (1 - 0.85 * h);
+  }
 
   let spin = null;
+  const _v = new THREE.Vector3();
+  function liftDir() {
+    if (!camera || !group.parent) return new THREE.Vector3(0, 1, 0);
+    group.parent.updateWorldMatrix(true, false);
+    _v.copy(camera.position);
+    group.parent.worldToLocal(_v);
+    return _v.sub(group.position).normalize();
+  }
   let current = 1;
 
   function setImmediate(value) {
@@ -115,7 +132,7 @@ export function createDice() {
     spin = null;
   }
 
-  function roll(value, { dur = 720, reduced = false } = {}) {
+  function roll(value, { dur = pop ? 950 : 720, reduced = false } = {}) {
     const startQ = group.quaternion.clone();
     const targetQ = quatFor(value);
     const total = reduced ? 260 : dur;
@@ -124,7 +141,8 @@ export function createDice() {
       spin = {
         startQ, targetQ, t: 0, total,
         spinQ: new THREE.Quaternion().setFromAxisAngle(axis, Math.PI * (reduced ? 1 : 3)),
-        startY: group.position.y,
+        startY: restY,
+        lift: liftDir(),
         resolve,
       };
       current = value;
@@ -132,7 +150,8 @@ export function createDice() {
       setTimeout(() => {
         if (!spin) return;
         group.quaternion.copy(targetQ);
-        group.position.y = spin.startY;
+        group.position.set(0, spin.startY, 0.02);
+        setPop(0);
         const done = spin.resolve;
         spin = null;
         done();
@@ -149,16 +168,21 @@ export function createDice() {
       const spinAngle = Math.PI * 2 * (1.6 + 1.4 * e);
       const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0.35, 0.2).normalize(), spinAngle * e);
       group.quaternion.copy(spin.startQ).multiply(q);
-      group.position.y = spin.startY + Math.sin(Math.PI * e) * 0.12;
+      setPop(pop ? Math.sin(Math.PI * e) : 0);
+      const a = Math.sin(Math.PI * e);
+      group.position.y = spin.startY + a * 0.12 * scale;
+      // sobe em direção à câmera: cresce na tela sem sair do centro
+      group.position.set(0, group.position.y, 0.02).addScaledVector(spin.lift, a * pop * 2.6);
     } else {
       const e = (k - 0.62) / 0.38;
       const eased = 1 - Math.pow(1 - e, 3);
       group.quaternion.copy(spin.startQ).slerp(spin.targetQ, eased);
       const bounce = Math.sin(Math.PI * Math.min(1, e * 1.15)) * 0.16 * (1 - e);
-      group.position.y = spin.startY + bounce;
+      group.position.set(0, spin.startY + bounce * scale, 0.02);
       if (k >= 1) {
         group.quaternion.copy(spin.targetQ);
         group.position.y = spin.startY;
+        setPop(0);
         const done = spin.resolve;
         spin = null;
         done();
@@ -180,7 +204,8 @@ export function createDice() {
   function setLowQuality(low, shadows = !low) {
     bodyMat.clearcoat = low ? 0.1 : 0.5;
     bodyMat.needsUpdate = true;
-    blob.material.opacity = shadows ? 0.3 : 0.55;
+    blob.material.userData.base = shadows ? 0.3 : 0.55;
+    blob.material.opacity = blobOpacity();
   }
 
   return { group, roll, setImmediate, update, pick, setLowQuality, get value() { return current; } };

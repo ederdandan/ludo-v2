@@ -11,7 +11,10 @@ const PAWN_WIDE = 1.14;
 const PAWN_TALL = 1.32;
 const TRACK_Y = 0.155; // casas entalhadas (CELL_TOP 0.15)
 const BASE_Y = 0.138;  // poço das bases (WELL_TOP 0.13)
-const GOAL_Y = 0.236;  // hub sobre o tampo (DECK_TOP 0.2)
+const GOAL_Y = 0.236;
+const GOAL_DIST = 1.2;   // distância do centro do hub (hub vai até ±1,5)
+const GOAL_GAP = 0.5;
+const GOAL_SCALE = 0.55; // peões concluídos menores, cabem 4 em fila  // hub sobre o tampo (DECK_TOP 0.2)
 
 function latheProfile() {
   const p = [
@@ -128,10 +131,13 @@ export function createPawns(E) {
     let y = TRACK_Y;
     if (rel < 0) y = BASE_Y;
     else if (rel === E.GOAL) {
+      // fileira na borda externa do triângulo da cor, longe do dado no centro
       y = GOAL_Y;
-      const a = (idx / 4) * Math.PI * 2;
-      x += Math.cos(a) * 0.62;
-      z += Math.sin(a) * 0.62;
+      const len = Math.hypot(x, z) || 1;
+      const ux = x / len, uz = z / len;
+      const off = (idx - 1.5) * GOAL_GAP;
+      x = ux * GOAL_DIST - uz * off;
+      z = uz * GOAL_DIST + ux * off;
     }
     return { x, y, z };
   }
@@ -159,7 +165,7 @@ export function createPawns(E) {
     for (const items of groups.values()) {
       const n = Math.min(items.length, 4);
       const offs = spreadOffsets[n] || [[0, 0]];
-      const scale = items.length > 1 ? 0.72 : 1;
+      const scale = items[0].rel === E.GOAL ? GOAL_SCALE : items.length > 1 ? 0.72 : 1;
       items.forEach((it, k) => {
         const [dx, dz] = offs[k] || [0, 0];
         result.push({ ...it, x: it.w.x + dx, y: it.w.y, z: it.w.z + dz, scale });
@@ -303,7 +309,7 @@ export function createPawns(E) {
     const rec = pawns.get(`${event.color}-${event.piece}`);
     if (!rec) return Promise.resolve();
     const w = worldFor(event.color, E.GOAL, event.piece);
-    return tweenTo(rec, w, { dur: 260, hop: 0.45 });
+    return tweenTo(rec, w, { dur: 260, hop: 0.45, scale: GOAL_SCALE });
   }
 
   function animateReturn(penalty) {

@@ -134,7 +134,8 @@ export function createView({ canvas, onPick, onDieClick, reducedMotion = false, 
   const pawns = createPawns(LudoEngine);
   board.group.add(pawns.group);
 
-  const dice = createDice();
+  // mobile: dado maior no hub e "salta" para o meio da tela ao rolar
+  const dice = createDice(mobile ? { scale: 1.7, pop: 1.0, camera } : { scale: 1.2, pop: 0.4, camera });
   board.group.add(dice.group);
 
   // anel de prévia (destino de uma jogada)
