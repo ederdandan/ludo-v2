@@ -8,6 +8,7 @@ import { BOARD_HALF_DIAGONAL, BOARD_YAW } from './GridMapper.js';
 import { LudoEngine } from '../game-engine.js';
 import { detectGpuTier, TIER_PROFILE } from './GpuTier.js';
 import { loadWoodPBR } from './PbrTextures.js';
+import { createPostFX } from './PostFX.js';
 
 const FOV = 32;
 const ELEV = THREE.MathUtils.degToRad(55);
@@ -183,6 +184,11 @@ export function createView({ canvas, onPick, onDieClick, reducedMotion = false, 
 
   applyQuality(profile.low, profile.shadows);
 
+  // Pós-processamento pesado (bloom HDR, DOF de diorama, vinheta) só no desktop
+  // forte; é a primeira coisa a cair se o FPS não sustentar. ?fx=0/1 força.
+  const fxParam = new URLSearchParams(location.search).get('fx');
+  const post = (fxParam === '1' || (fxParam !== '0' && !mobile && gpu.tier === 3)) ? createPostFX(renderer) : null;
+
   // Faixa vertical livre entre o HUD de cima (topo, cards superiores) e o de baixo
   // (cards inferiores, dock). Só usada no retrato, onde o HUD empilha acima/abaixo.
   function safeBand(h) {
@@ -282,12 +288,15 @@ export function createView({ canvas, onPick, onDieClick, reducedMotion = false, 
       camTarget.z + Math.cos(el) * Math.cos(az) * r
     );
     camera.lookAt(camTarget);
+    // faixa nítida cobre o tabuleiro; só as bordas da laje e o fundo desfocam
+    post?.setFocus(r, BOARD_RADIUS * 0.5);
   }
 
   function resize() {
     const w = canvas.clientWidth || window.innerWidth;
     const h = canvas.clientHeight || window.innerHeight;
     renderer.setSize(w, h, false);
+    post?.setSize();
     fit();
   }
 
@@ -343,7 +352,8 @@ export function createView({ canvas, onPick, onDieClick, reducedMotion = false, 
 
     pawns.update(dt);
     dice.update(dt);
-    renderer.render(scene, camera);
+    if (post?.enabled) post.render(scene, camera);
+    else renderer.render(scene, camera);
 
     bandTime += dt;
     if (bandTime >= 0.4) { bandTime = 0; checkBand(); }
@@ -357,9 +367,12 @@ export function createView({ canvas, onPick, onDieClick, reducedMotion = false, 
         const fps = frames / fpsTime;
         frames = 0;
         fpsTime = 0;
-        if (fps < TARGET_FPS && pixelRatio > MIN_PR) {
+        if (fps < TARGET_FPS && post?.enabled) {
+          post.enabled = false;
+        } else if (fps < TARGET_FPS && pixelRatio > MIN_PR) {
           pixelRatio = Math.max(MIN_PR, pixelRatio - 0.25);
           renderer.setPixelRatio(pixelRatio);
+          post?.setSize();
         } else if (fps < LOW_FPS && (!state.low || state.shadows)) {
           applyQuality(true, false);
           measured = true;
@@ -387,6 +400,7 @@ export function createView({ canvas, onPick, onDieClick, reducedMotion = false, 
     scene, camera, renderer, board, pawns, dice,
     resize,
     gpu,
+    post,
     setQuality: applyQuality,
 
     setDie(v) { dice.setImmediate(v || 1); },
