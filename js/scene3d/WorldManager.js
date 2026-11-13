@@ -7,6 +7,7 @@ import { createDice } from './Dice3D.js';
 import { BOARD_HALF_DIAGONAL, BOARD_YAW } from './GridMapper.js';
 import { LudoEngine } from '../game-engine.js';
 import { detectGpuTier, TIER_PROFILE } from './GpuTier.js';
+import { loadWoodPBR } from './PbrTextures.js';
 
 const FOV = 32;
 const ELEV = THREE.MathUtils.degToRad(55);
@@ -126,6 +127,8 @@ export function createView({ canvas, onPick, onDieClick, reducedMotion = false, 
   // ---- tabuleiro, peões, dado ----
   const board = buildBoard(LudoEngine);
   scene.add(board.group);
+  // madeira PBR KTX2 chega depois do 1º quadro; até lá vale a procedural
+  loadWoodPBR(renderer).then((t) => { if (t) board.applyWoodPBR(t); });
 
   const pawns = createPawns(LudoEngine);
   board.group.add(pawns.group);

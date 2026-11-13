@@ -1,6 +1,6 @@
 /* Ludo Supreme v2 — service worker offline-first.
    Caminhos relativos: funciona em raiz de domínio e em /repo-name/. */
-const CACHE_NAME = 'ludo-v2.0.5-wood3d';
+const CACHE_NAME = 'ludo-v2.0.6-pbr';
 
 const PRECACHE = [
   './',
@@ -17,6 +17,16 @@ const PRECACHE = [
   './js/scene3d/WoodTextures.js',
   './js/scene3d/GridMapper.js',
   './js/scene3d/GpuTier.js',
+  './js/scene3d/PbrTextures.js',
+  './vendor/ktx2/KTX2Loader.js',
+  './vendor/ktx2/WorkerPool.js',
+  './vendor/ktx2/ktx-parse.module.js',
+  './vendor/ktx2/zstddec.module.js',
+  './vendor/ktx2/basis/basis_transcoder.js',
+  './vendor/ktx2/basis/basis_transcoder.wasm',
+  './assets/textures/oak_albedo.ktx2',
+  './assets/textures/oak_normal.ktx2',
+  './assets/textures/oak_rough.ktx2',
   './vendor/three.module.min.js',
   './vendor/tailwind.js',
   './vendor/confetti.min.js',

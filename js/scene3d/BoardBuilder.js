@@ -537,8 +537,27 @@ export function buildBoard(E) {
     });
   }
 
+  // Troca a madeira procedural pela PBR KTX2 (chamado quando o carregamento assíncrono termina).
+  let pbrTex = null;
+  function applyWoodPBR(t) {
+    pbrTex = t;
+    for (const [m, tint, rough, ns] of [[wood, '#ffffff', 0.8, 0.8], [woodFrame, '#f3e4d2', 0.75, 0.7]]) {
+      for (const k of ['map', 'normalMap', 'roughnessMap']) {
+        const tex = t[k].clone(); // clone compartilha a imagem na GPU, só muda repeat
+        tex.repeat.set(0.22, 0.22);
+        tex.needsUpdate = true;
+        m[k] = tex;
+      }
+      m.color.set(tint);
+      m.roughness = rough;
+      m.normalScale.set(ns, ns);
+      m.needsUpdate = true;
+    }
+    for (const tex of [woodTex.map, woodTex.normalMap, woodTex.roughnessMap]) tex?.dispose?.();
+  }
+
   return {
-    group, materials, plates, setLowQuality,
+    group, materials, plates, setLowQuality, applyWoodPBR,
     cells, starCells, baseGroups,
     dispose() {
       group.traverse((o) => {
@@ -549,6 +568,7 @@ export function buildBoard(E) {
         }
       });
       for (const t of [woodTex.map, woodTex.normalMap, slateTex, contactTex, depthTex, aoTex]) t?.dispose?.();
+      if (pbrTex) for (const t of Object.values(pbrTex)) t.dispose();
     },
   };
 }

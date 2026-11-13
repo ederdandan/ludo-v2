@@ -1,0 +1,2 @@
+oak_*.ktx2 — "Oak Veneer 01" de Poly Haven (polyhaven.com/a/oak_veneer_01), licença CC0.
+Gerado por scripts/encode-textures.sh (basisu 1.16).
