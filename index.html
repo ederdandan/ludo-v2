@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Ludo Supreme — Madeira Nobre</title>
 <meta name="theme-color" content="#141922">
 <meta name="description" content="Ludo clássico em um diorama 3D de madeira e resina. Solo, no mesmo aparelho ou online.">
@@ -72,6 +72,15 @@
 
 <script>
 /* PWA: registra cedo, antes do build 3D, para o SW controlar já a 1ª visita. */
+/* Só jogar: bloqueia seleção, menu de contexto, arrastar e pinça (iOS ignora user-scalable). */
+(() => {
+  const editable = (t) => t && t.closest && t.closest('input, textarea, [contenteditable="true"]');
+  for (const ev of ['selectstart', 'contextmenu', 'dragstart']) {
+    document.addEventListener(ev, (e) => { if (!editable(e.target)) e.preventDefault(); }, { capture: true });
+  }
+  for (const ev of ['gesturestart', 'gesturechange']) document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
+  document.addEventListener('touchmove', (e) => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+})();
 /* Instalação: o evento pode chegar antes do main.js; guarda e avisa a home. */
 window.addEventListener('beforeinstallprompt', (e) => {
   e.preventDefault();

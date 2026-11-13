@@ -35,6 +35,19 @@ body {
   overscroll-behavior: none;
 }
 
+/* Só jogar: nada de seleção de texto, menu de toque longo, arrastar imagens
+   ou zoom por duplo toque — no site e no app instalado. Campos seguem editáveis. */
+html, body, body * {
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
+}
+img, svg, canvas { -webkit-user-drag: none; user-drag: none; }
+html, body { touch-action: manipulation; }
+input, textarea, [contenteditable="true"] {
+  -webkit-user-select: text; user-select: text;
+  -webkit-touch-callout: default;
+}
+
 /* ---------- palco 3D ---------- */
 #stage {
   position: fixed; inset: 0; width: 100%; height: 100%;
