@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ludo Supreme — Madeira Nobre</title>
+<meta name="theme-color" content="#141922">
+<meta name="description" content="Ludo clássico em um diorama 3D de madeira e resina. Solo, no mesmo aparelho ou online.">
+<link rel="manifest" href="./manifest.json">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 4 4'%3E%3Crect width='2' height='2' fill='%23b3181a'/%3E%3Crect x='2' width='2' height='2' fill='%23146b2b'/%3E%3Crect x='2' y='2' width='2' height='2' fill='%23c08a1e'/%3E%3Crect y='2' width='2' height='2' fill='%232a4090'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="./icons/icon-192.png">
+<link rel="stylesheet" href="./vendor/fontawesome/all.min.css">
+<link rel="stylesheet" href="./css/theme.css">
+<link rel="stylesheet" href="./css/layout.css">
+<script src="./vendor/tailwind.js"></script>
+<script src="./vendor/confetti.min.js" defer></script>
+</head>
+<body>
+
+<canvas id="stage" aria-hidden="true"></canvas>
+<div id="vignette" aria-hidden="true"></div>
+
+<div id="app">
+  <section id="screen-home" class="screen"></section>
+  <section id="screen-setup" class="screen" hidden></section>
+  <section id="screen-lobby" class="screen" hidden></section>
+
+  <section id="screen-game" class="screen" hidden>
+    <header class="hud-top">
+      <button class="icon-btn" id="btn-exit" aria-label="Voltar ao menu"><i class="fa-solid fa-arrow-left"></i></button>
+      <div class="hud-title" id="game-title">Ludo Supreme</div>
+      <div id="status" class="hud-status" aria-live="polite"></div>
+      <button class="icon-btn" id="btn-rules" aria-label="Regras desta partida"><i class="fa-solid fa-circle-info"></i></button>
+      <button class="icon-btn" id="btn-history" aria-label="Últimas jogadas"><i class="fa-solid fa-list-ul"></i></button>
+      <button class="icon-btn" id="btn-pause" aria-label="Pausar"><i class="fa-solid fa-pause"></i></button>
+      <button class="icon-btn" id="btn-mute" aria-label="Som"><i class="fa-solid fa-volume-high"></i></button>
+    </header>
+
+    <div id="players"></div>
+    <div id="turn-banner" class="turn-banner" aria-hidden="true"></div>
+
+    <div id="emotes" class="emotes" hidden aria-label="Emotes"></div>
+
+    <div class="dock">
+      <button id="die-btn" class="die-btn" aria-label="Rolar o dado (Espaço)">
+        <i class="fa-solid fa-dice" aria-hidden="true"></i>
+      </button>
+      <div class="dock-info">
+        <div id="die-hint" class="dock-hint"></div>
+        <div id="sixes" class="sixes" aria-label="Seis consecutivos"></div>
+        <div id="timer-text" class="timer-text"></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div id="emote-layer" aria-hidden="true"></div>
+<div id="modal-root"></div>
+<div id="net-banner" class="net-banner" role="status" hidden><i class="fa-solid fa-wifi" aria-hidden="true"></i> Reconectando…</div>
+
+<div id="boot" style="position:fixed;inset:0;z-index:300;display:grid;place-items:center;background:#0f141c;transition:opacity .4s">
+  <div style="text-align:center">
+    <div class="spinner" style="margin-bottom:14px"></div>
+    <div style="font-weight:700;letter-spacing:.08em;font-size:.78rem;color:#9dabbd">PREPARANDO A MESA…</div>
+  </div>
+</div>
+
+<script>
+/* PWA: registra cedo, antes do build 3D, para o SW controlar já a 1ª visita. */
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+  navigator.serviceWorker.register('./sw.js').catch(() => { /* offline opcional */ });
+}
+</script>
+<script type="module" src="./js/main.js"></script>
+</body>
+</html>

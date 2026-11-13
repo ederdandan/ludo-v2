@@ -1,0 +1,21 @@
+{
+  "name": "Ludo Supreme — Madeira Nobre",
+  "short_name": "Ludo Supreme",
+  "description": "Ludo clássico em um diorama 3D de madeira e resina. Jogue sozinho, no mesmo aparelho ou online.",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "start_url": "./",
+  "scope": "./",
+  "id": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#141922",
+  "theme_color": "#141922",
+  "categories": ["games", "board"],
+  "icons": [
+    { "src": "./icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

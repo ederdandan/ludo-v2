@@ -1,0 +1,11 @@
+{
+  "name": "ludo-supreme",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Ludo Supreme — diorama 3D de madeira e resina (PWA, solo/local/online)",
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/serve.cjs 5173",
+    "test": "node tests/engine.test.mjs"
+  }
+}

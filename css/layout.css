@@ -1,0 +1,80 @@
+/* =========================================================
+   Layout — enquadramento do HUD sobre o diorama 3D.
+   Desktop ≥ 900px: pílulas nos quatro cantos.
+   Mobile < 900px: 2 pílulas no topo, 2 acima do dock.
+   ========================================================= */
+
+#screen-game { display: block; }
+
+/* topo */
+.hud-top { --pad: 12px; }
+.hud-title { display: none; }
+.hud-status { order: 3; }
+
+@media (min-width: 900px) {
+  .hud-top {
+    padding: max(14px, env(safe-area-inset-top)) 18px 10px;
+    gap: 10px;
+  }
+  .hud-title { display: block; margin-right: 4px; }
+  .hud-status { max-width: 520px; }
+}
+
+/* ---------- pílulas ---------- */
+@media (min-width: 900px) {
+  .pill { width: 236px; }
+  .pill[data-color="red"] { left: 18px; top: 13%; }
+  .pill[data-color="green"] { right: 18px; top: 13%; }
+  .pill[data-color="yellow"] { right: 18px; bottom: 15%; }
+  .pill[data-color="blue"] { left: 18px; bottom: 15%; }
+}
+
+@media (max-width: 899px) {
+  .pill {
+    width: calc(50vw - 18px);
+    max-width: none;
+    padding: 5px 12px 5px 5px;
+    gap: 8px;
+  }
+  .pill-avatar { width: 38px; height: 38px; }
+  .pill-avatar .avatar { width: 34px; height: 34px; font-size: 18px; }
+  .pill-name { font-size: .78rem; max-width: 92px; }
+  .pill-sub { font-size: .56rem; }
+  .pill[data-color="red"] { left: 8px; top: 104px; }
+  .pill[data-color="green"] { right: 8px; top: 104px; }
+  .pill[data-color="blue"] { left: 8px; bottom: 104px; }
+  .pill[data-color="yellow"] { right: 8px; bottom: 104px; }
+}
+
+@media (max-width: 420px) {
+  .pill { width: calc(50vw - 12px); }
+  .pill-name { max-width: 72px; }
+  .pill-dots { display: none; }
+}
+
+/* ---------- dock ---------- */
+@media (min-width: 900px) {
+  .dock { bottom: max(18px, env(safe-area-inset-bottom)); padding: 12px 22px; }
+}
+@media (max-width: 899px) {
+  .dock { gap: 10px; padding: 8px 14px; border-radius: 1.2rem; }
+  .die-btn { width: 52px; height: 52px; border-radius: 14px; }
+  .dock-hint { font-size: .72rem; }
+  .emotes { bottom: 84px; }
+  .emotes .emote-btn { width: 38px; height: 38px; font-size: 1.1rem; }
+}
+
+/* telas de menu: largura confortável e respiro */
+#screen-home > div, #screen-setup > div, #screen-lobby > div {
+  max-width: 30rem;
+  margin: 0 auto;
+}
+@media (min-width: 900px) {
+  #screen-home > div, #screen-setup > div, #screen-lobby > div { max-width: 34rem; }
+}
+
+/* aviso de dispositivo em retrato muito estreito */
+@media (max-width: 360px) {
+  .hud-status { font-size: .72rem; }
+  .dock-hint .sub { display: none; }
+}
