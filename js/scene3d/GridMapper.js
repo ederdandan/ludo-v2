@@ -30,3 +30,10 @@ export const BOARD_YAW = Math.PI / 4;
 
 // Raio da bbox do tabuleiro girado (meia-diagonal) — usado no enquadramento.
 export const BOARD_HALF_DIAGONAL = Math.SQRT2 * (GRID / 2);
+
+// Direção (no plano local do tabuleiro) para onde a luz principal (8,14,7) projeta
+// sombras, por unidade de altura. Usada nas sombras falsas/AO pré-calculado, que só
+// importam no celular (sem shadow map) — lá o uso é em retrato, onde o tabuleiro
+// fica sem o giro de 45°, então local = mundo.
+export const SHADOW_DX = -8 / 14;
+export const SHADOW_DZ = -7 / 14;

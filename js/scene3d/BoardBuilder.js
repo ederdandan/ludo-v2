@@ -2,7 +2,7 @@
 // bases com anéis de latão, hub central e sombras.
 import * as THREE from '../../vendor/three.module.min.js';
 import { makeWoodTextures, makeSlateTexture, makeContactShadowTexture, makeCellTexture } from './WoodTextures.js';
-import { cellToWorld, blockCenter, pointToWorld, BOARD_YAW } from './GridMapper.js';
+import { cellToWorld, blockCenter, pointToWorld, BOARD_YAW, SHADOW_DX, SHADOW_DZ } from './GridMapper.js';
 
 export const RESIN_HEX = {
   red: '#a5140d',
@@ -379,6 +379,66 @@ export function buildBoard(E) {
   hubCap.position.y = 0.12;
   group.add(hubCap);
 
+  // ---------------- AO pré-calculado ----------------
+  // Celular não tem shadow map: uma textura única (gerada uma vez em canvas) escurece
+  // o fundo das ranhuras junto às casas, à moldura, às bases e ao hub — oclusão
+  // ambiente + uma sombra curta na direção da luz principal. As casas tampam a
+  // película por cima, então só as frestas ficam escuras.
+  const AO_SPAN = 15.6;
+  const aoTex = (() => {
+    const S = 1024, k = S / AO_SPAN, OFF = 4000;
+    const c = document.createElement('canvas');
+    c.width = c.height = S;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = 'rgba(0,0,0,.2)';
+    ctx.fillRect(0, 0, S, S);
+    const px = (x) => (x + AO_SPAN / 2) * k;
+    // casters: [x, z, w, d, altura, raio]
+    const casters = [];
+    for (const cl of cells) {
+      const resinCell = (cl.abs != null && START_COLOR[cl.abs]) || cl.home;
+      const w = resinCell ? 0.97 : 0.88;
+      casters.push([cl.x, cl.z, w, w, 0.05, 0.09]);
+    }
+    for (const bgc of Object.values(baseGroups)) casters.push([bgc.position.x, bgc.position.z, 5.98, 5.98, 0.24, 0.34]);
+    casters.push([0, 0, 2.98, 2.98, 0.1, 0.16]);
+    const L = 7.73, T = 3; // moldura: retângulos além da borda interna
+    casters.push([0, -L - T / 2, 20, T, 0.16, 0], [0, L + T / 2, 20, T, 0.16, 0],
+      [-L - T / 2, 0, T, 20, 0.16, 0], [L + T / 2, 0, T, 20, 0.16, 0]);
+    function pass(alpha, blurU, dirScale) {
+      ctx.save();
+      ctx.shadowColor = `rgba(0,0,0,${alpha})`;
+      ctx.shadowBlur = blurU * k;
+      ctx.fillStyle = '#000';
+      for (const [x, z, w, d, h, r] of casters) {
+        ctx.shadowOffsetX = OFF + SHADOW_DX * h * dirScale * k;
+        ctx.shadowOffsetY = SHADOW_DZ * h * dirScale * k;
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(px(x - w / 2) - OFF, px(z - d / 2), w * k, d * k, r * k);
+        else ctx.rect(px(x - w / 2) - OFF, px(z - d / 2), w * k, d * k);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+    pass(0.5, 0.16, 0);   // oclusão larga
+    pass(0.55, 0.05, 0);  // canto de contato
+    pass(0.4, 0.07, 1);   // sombra curta direcional
+    const t = new THREE.CanvasTexture(c);
+    t.anisotropy = 4;
+    return t;
+  })();
+  const aoGeo = new THREE.PlaneGeometry(AO_SPAN, AO_SPAN);
+  aoGeo.rotateX(-Math.PI / 2);
+  const aoMat = new THREE.MeshBasicMaterial({
+    color: 0x000000, map: aoTex, transparent: true, depthWrite: false, opacity: 0.6,
+    polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2,
+  });
+  const aoFloor = new THREE.Mesh(aoGeo, aoMat);
+  aoFloor.position.y = 0.003;
+  aoFloor.renderOrder = 1;
+  aoFloor.name = 'floor-ao';
+  group.add(aoFloor);
+
   group.rotation.y = BOARD_YAW;
 
   // ---------------- qualidade ----------------
@@ -402,6 +462,7 @@ export function buildBoard(E) {
   function setLowQuality(value) {
     if (low === value) return;
     low = value;
+    aoMat.opacity = value ? 1 : 0.6;
     for (const [color, m] of Object.entries(resin)) {
       m.transparent = false;
       m.opacity = 1;
@@ -442,7 +503,7 @@ export function buildBoard(E) {
           else o.material?.dispose?.();
         }
       });
-      for (const t of [woodTex.map, woodTex.normalMap, slateTex, contactTex, depthTex]) t?.dispose?.();
+      for (const t of [woodTex.map, woodTex.normalMap, slateTex, contactTex, depthTex, aoTex]) t?.dispose?.();
     },
   };
 }

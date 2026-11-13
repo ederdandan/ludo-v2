@@ -2,6 +2,8 @@
 // prévia de destino, raycasting e animações (salto por casa, captura, chegada).
 import * as THREE from '../../vendor/three.module.min.js';
 import { RESIN_HEX } from './BoardBuilder.js';
+import { SHADOW_DX, SHADOW_DZ } from './GridMapper.js';
+import { makeBlobTexture } from './WoodTextures.js';
 
 const PAWN_HEIGHT = 0.66;
 // Peões maiores (leitura no celular): mais largos e bem mais altos.
@@ -27,7 +29,9 @@ export function createPawns(E) {
   // manchas de contato (falsas sombras) separadas, para não subirem no salto
   const shadowGroup = new THREE.Group();
   group.add(shadowGroup);
-  const blobGeo = new THREE.CircleGeometry(0.33 * PAWN_WIDE, 22);
+  const blobGeo = new THREE.PlaneGeometry(0.98 * PAWN_WIDE, 0.98 * PAWN_WIDE);
+  const blobTex = makeBlobTexture();
+  let blobStrength = 0.36; // mais forte no celular (sem shadow map)
 
   const geo = new THREE.LatheGeometry(latheProfile(), 28);
   geo.computeVertexNormals();
@@ -93,7 +97,7 @@ export function createPawns(E) {
 
     const blob = new THREE.Mesh(
       blobGeo,
-      new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.26, depthWrite: false })
+      new THREE.MeshBasicMaterial({ color: 0x000000, map: blobTex, transparent: true, opacity: 0.26, depthWrite: false })
     );
     blob.rotation.x = -Math.PI / 2;
     blob.renderOrder = 2;
@@ -226,9 +230,11 @@ export function createPawns(E) {
       const ground = rec.baseY != null ? rec.baseY : TRACK_Y;
       const air = Math.max(0, rec.root.position.y - ground);
       rec.blob.visible = rec.root.visible;
-      rec.blob.position.set(rec.root.position.x, ground + 0.006, rec.root.position.z);
-      rec.blob.material.opacity = 0.3 * Math.max(0.15, 1 - air * 1.4);
-      rec.blob.scale.setScalar(1 - Math.min(0.45, air * 0.7));
+      // desloca na direção da luz (sobe → a sombra se afasta e esmaece)
+      const sh = 0.16 + air;
+      rec.blob.position.set(rec.root.position.x + SHADOW_DX * sh, ground + 0.006, rec.root.position.z + SHADOW_DZ * sh);
+      rec.blob.material.opacity = blobStrength * Math.max(0.15, 1 - air * 1.4);
+      rec.blob.scale.setScalar(1 + Math.min(0.3, air * 0.5));
     }
   }
 
@@ -324,6 +330,7 @@ export function createPawns(E) {
   // Mobile: sem transmission. Vidro falso — opaco, saturado, verniz espelhado e
   // emissivo mais alto para parecer iluminado por dentro.
   function setLowQuality(low) {
+    blobStrength = low ? 0.62 : 0.36;
     for (const color of E.COLORS) {
       for (const m of [mat[color], highMat[color]]) {
         m.transparent = false; m.opacity = 1;

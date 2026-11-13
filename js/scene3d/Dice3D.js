@@ -1,5 +1,6 @@
 // Dice3D — dado de marfim com pips rebaixados, tumbling e clique/toque.
 import * as THREE from '../../vendor/three.module.min.js';
+import { makeBlobTexture } from './WoodTextures.js';
 
 const SIZE = 0.72;
 const HALF = SIZE / 2;
@@ -95,8 +96,8 @@ export function createDice() {
 
   // sombra de contato suave
   const blob = new THREE.Mesh(
-    new THREE.CircleGeometry(HALF * 1.12, 24),
-    new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.22, depthWrite: false })
+    new THREE.PlaneGeometry(HALF * 3.4, HALF * 3.4),
+    new THREE.MeshBasicMaterial({ color: 0x000000, map: makeBlobTexture(), transparent: true, opacity: 0.3, depthWrite: false })
   );
   blob.rotation.x = -Math.PI / 2;
   blob.position.y = -HALF + 0.004;
@@ -179,6 +180,7 @@ export function createDice() {
   function setLowQuality(low) {
     bodyMat.clearcoat = low ? 0.1 : 0.5;
     bodyMat.needsUpdate = true;
+    blob.material.opacity = low ? 0.55 : 0.3;
   }
 
   return { group, roll, setImmediate, update, pick, setLowQuality, get value() { return current; } };
